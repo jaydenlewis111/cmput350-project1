@@ -1,30 +1,29 @@
 #ifndef PLAYER_H
 #define PLAYER_H
-
 #include "CollisionObject.h"
-
-class Player : public CMPUT350::CollisionObject
-{
+#include <array>
+class Bullet;
+namespace CMPUT350 { class NotificationManager; }
+class Player : public CMPUT350::CollisionObject {
 public:
-    Player(CMPUT350::Point2D loc);
-
-    // GameObject Functions
-    void Initialize(CMPUT350::GameContext* context) override;
-    void Update(CMPUT350::GameContext* context) override;
-    void LateUpdate(CMPUT350::GameContext* context) override;
-    bool HandleKeyEvent(CMPUT350::GameContext* context, char key) override;
-    bool IsAlive() const override;
+    explicit Player(CMPUT350::Point2D location);
+    void Initialize(CMPUT350::GameContext *context) override;
+    void Update(CMPUT350::GameContext *context) override;
+    void ReceiveNotification(const std::string &message) override;
+    void RenderForeground(CMPUT350::GameContext *context) override;
+    void CollisionEnter(const std::shared_ptr<CMPUT350::CollisionObject> &obj) override;
+    const CMPUT350::Rect &GetBounds() override;
+    const std::vector<CMPUT350::Shape> &GetShapes() override;
+    CMPUT350::Point2D GetLocation() const override;
+    float GetRotation() const override;
     void Kill() override;
-
-    // Graphics Object Functions
-    void RenderBackground(CMPUT350::GameContext* context) override;
-    void RenderForeground(CMPUT350::GameContext* context) override;
-
-
-    // Collision Object Functions
-    void CollisionEnter(const std::shared_ptr<CMPUT350::CollisionObject>& obj) override;
-    const CMPUT350::Rect& GetBounds() override;
-
+private:
+    void Fire(CMPUT350::GameContext *context);
+    CMPUT350::Point2D mLocation;
+    CMPUT350::Rect mBounds{-20,-20,40,40};
+    std::vector<CMPUT350::Shape> mShapes;
+    std::array<std::weak_ptr<Bullet>,2> mBullets;
+    CMPUT350::NotificationManager *mNotifications = nullptr;
+    int mLeft = 0, mRight = 0, mFire = 0, mNextShot = 0, mFrame = 0, mInvulnerableUntil = 0;
 };
-
 #endif

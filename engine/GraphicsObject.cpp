@@ -2,7 +2,7 @@
 
 namespace CMPUT350 {
 
-void GraphicsObject::RenderBackground(GameContext *contextrender) { return; }
-void GraphicsObject::RenderForeground(GameContext *contextrender) { return; }
+void GraphicsObject::RenderBackground(GameContext *) {}
+void GraphicsObject::RenderForeground(GameContext *) {}
 
 }  // namespace CMPUT350

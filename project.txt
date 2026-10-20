@@ -1,0 +1,146 @@
+CMPUT 350 PROJECT 1b
+===================
+
+OVERVIEW AND CONTROLS
+Build with CMake and a C++20 compiler, then run build/Project1. The 768x1024 game
+uses pixels, with (0,0) at the top-left. Press 5 to insert a coin and 1 to start.
+Hold A/D or Left/Right to move and Space to fire. The player is constrained to the
+window and has at most two owned/pending bullets. Close the window to quit.
+The optional --balls argument retains the Part 1a collision demonstration.
+
+ENGINE DESIGN
+GameEngine owns active and pending objects with shared_ptr. Additions during
+callbacks are activated and initialized at the next frame boundary; dead objects
+are compacted out at the start of a frame. The loop initializes additions, processes
+input, updates, computes collisions, invokes late updates, draws backgrounds and
+foregrounds, draws UI, and displays. currentFrame starts at zero and advances once
+per displayed frame. The engine caps its rate at 30 frames/second.
+
+EngineView exposes only addition, scancode notification installation, and const
+iteration over active objects. Pending objects are deliberately not visible through
+iterators. CurrObject is a weak reference set for lifecycle/render callbacks.
+Notification callbacks use their specified string-only interface.
+
+NotificationManager stores weak subscriptions indexed by exact message. Duplicate
+registrations are suppressed. Notify removes dead/expired listeners and immediately
+delivers to a snapshot, allowing callbacks to register, unregister, or notify again.
+Changes apply to subsequent notifications; objects killed during dispatch are skipped.
+Objects must avoid infinitely notifying the same event recursively.
+
+Input uses physical SFML KeyPressed/KeyReleased scancodes, with OS key repeat
+disabled and a held-key set to suppress repeats. Multiple messages can be mapped
+to a scancode. Lost focus releases held actions. The player's per-action counters
+allow holding both A and Left without stopping when only one is released.
+The assignment referenced a provided Keyboard.h but none was supplied; the added
+adapter aliases CMPUT350::Key to sf::Keyboard::Scancode.
+
+GraphicsObject returns its rotation center and clockwise radians. Shapes, bounds,
+and draw commands are in object-local coordinates. DrawContext privately applies
+rotation followed by translation; the inverse subtracts the translation then
+rotates by the negative angle. Rectangles rotate as rectangles when rendered,
+while transformed broad-phase bounds enclose all four rotated corners. A separate
+GUIContext always uses the identity transform, and RenderUI follows foreground
+drawing. The static star field uses the identity object frame.
+
+Collision objects return a union of directed lines, circles, and local axis-aligned
+rectangles. The engine first checks transformed bounding boxes and then component
+pairs: segment intersection, quadratic line/circle intersection, slab line/rectangle
+clipping in the rectangle's frame, circle distances, closest-point circle/rectangle
+testing, and separating axes for rotated rectangles. Boundaries count as contact.
+A line starting inside a shape collides at its first endpoint. Collinear overlapping
+lines return the first shared point along each directed segment. Zero-length lines
+are supported. Each object pair is checked once, irrespective of component count.
+
+Contact records are computed before callbacks change shapes or object lifetime.
+Each detected pair receives one callback per participant, even if an earlier callback
+kills a participant. Lines provide the first intersection in each receiver's local
+space. Non-line pairs use the callback without a point. With several line components,
+the component with the smallest segment parameter supplies the point. Objects with
+no precise shapes do not collide.
+
+Bezier supports any 3*k+1 control points and computes cubic positions and derivatives
+across all segments. Invalid point counts or nonfinite times throw; finite out-of-range
+times clamp to the endpoints. An arc-length lookup table uses 256 samples per segment
+and interpolates distance to parameter, providing approximately constant path speed
+instead of stepping the cubic parameter uniformly. Enemy rotation follows its tangent.
+
+GAME STATE FLOW
+Galaga is the only game object main needs to add. It installs input bindings,
+subscribes to score/death/coin messages, and adds the stars and all ships.
+
+Waiting: show coin/start instructions and credit count. Start consumes one credit.
+Startup: reset a new game if needed, create the player, show level/score/lives for
+90 frames, then begin incoming waves.
+Waves: spawn five groups of eight ships, with staggered launches and small group
+gaps. Each ship follows a Bezier entry path to its home slot. All surviving ships
+must finish arriving before attacks begin. If the player dies during arrival,
+waves continue and respawn waits until the surviving ships are in formation.
+Playing: ships hover in synchronized formation. At deterministic frame intervals,
+Galaga iterates over active objects, selects a rotating subset of ready enemies,
+and asks them to attack. Selection does not use random game logic. Different enemy
+classes follow different attack curves, fire aimed bullets, and follow a return
+curve to formation. Later levels reduce attack delay and increase simultaneous
+attackers (up to four).
+Respawn is handled within Waves/Playing: stop selecting attacks after player death,
+wait for all surviving ships to return, wait 60 frames, then create a new ship.
+The new ship has 60 frames of flashing invulnerability and a 90-frame delay before
+new attacks are selected. The HUD shows remaining lives.
+When all 40 spawned enemies are destroyed, clear the old round and bullets, advance
+the level, and enter Startup. Score and remaining lives carry forward.
+GameOver: after the third player death, quietly clear gameplay objects, display the
+final score for 150 frames, then return to Waiting. A new credit/start resets score,
+level, lives, counters, and the player reference. Stars persist across games.
+
+ENEMIES, BULLETS, AND SCORE
+Enemy is an abstract common path/health/collision implementation. Enemy1 is a cyan
+cross with one health and a direct curved dive (100 points). Enemy2 is a green
+armored circle with two health and a looping dive (200 points). Enemy3 is a magenta
+chevron with two health and a wider crossing dive (300 points). Armored enemies turn
+red with one health remaining. Killing an enemy while outside formation doubles its
+score. EnemyDestroyed:<points> notifications update the manager's score and count;
+each enemy reports death only once. Player contact destroys the enemy, while player
+bullets remove one health per hit. Friendly and hostile bullets ignore their owners'
+team. The player emits PlayerDestroyed once when killed.
+
+Bullets represent their previous/current positions as a directed local line, so a
+fast projectile cannot pass through a target between frames. A collision clears the
+bullet's shapes and displays one small circle at the supplied contact for eight
+frames; among simultaneous contacts it selects the largest local y as requested.
+Collision contacts are a frame snapshot, so one swept bullet may notify multiple
+overlapping targets that frame. Its impact circle is selected consistently from
+those contacts. A weak parent reference makes the bullet dead as soon as its parent
+dies or expires, including while showing an impact. Weak player bullet slots never
+keep bullets alive. Explosions occupy a slot until removal.
+
+Round cleanup explicitly calls the base Kill implementation to avoid awarding
+points or consuming lives while resetting. Dead/expired notification subscribers
+are removed automatically. No game object owns the engine or another ship strongly.
+
+Vector2D is declared with "using Vector2D = Point2D". Velocity, direction, offsets,
+Bezier derivatives, rotation helpers, and collision axes use Vector2D where they
+represent vectors rather than positions. Keyboard reassignment, replay recording,
+and ship capture are not implemented.
+
+VALIDATION
+CoreTests exercises point/rectangle/line math, inverse transforms, rotated bounds,
+all six primitive shape pairings, broad-phase false positives, tangency and inside
+starts, nearest directed contacts, Bezier endpoints/derivatives/arc length, weak
+notification subscriptions and reentrancy, bullet parent lifetime, impact selection,
+and enemy health.
+EngineLoopTests optionally runs actual SFML window frames to check lifecycle order,
+deferred children, object cleanup, collision callback count, current object/frame,
+render/UI ordering, and physical scancode press/release notifications.
+GameplayTests optionally simulates the actual game objects without a frame-rate
+delay to check credits, startup, input, bullet limits, all 40 arrivals, enemy mix,
+hovering, attacks and shots, respawn, lives, score, round cleanup, next level,
+game over, and a fresh restart. Graphical tests require a Linux X display.
+Build/test instructions and platform dependencies are in README.md.
+
+TEAM CONTRIBUTIONS AND AI USAGE
+I, Jayden Lewis, writing this am the only team member.
+I used the following prompts for AI:
+
+1. "Please look through the code and explain what tools
+I would need to complete this assignment without giving me the solution."
+2. "Please generate tests for the code that aligns with the assigment requirements
+so I can test against it."

@@ -1,14 +1,17 @@
 #include <random>
+#include <string>
+#include "GameContext.h"
 #include "GameEngine.h"
 #include "Player.h"
 #include "Enemy.h"
 #include "Stars.h"
+#include "Galaga.h"
 
 class Ball : public CMPUT350::CollisionObject
 {
 public:
-    Ball(int radius) : CollisionObject(), mRadius(radius), mNumCollisions(0), mLoc(radius, radius), mSpeed(3, 3),
-                       mSpeedNext(3, 3), mFrameCollisions(0)
+    Ball(int radius) : CollisionObject(), mRadius(radius), mNumCollisions(0), mFrameCollisions(0),
+                       mLoc(radius, radius), mSpeed(3, 3), mSpeedNext(3, 3)
     {
         std::uniform_int_distribution<int> xRand(mRadius, 1024 - mRadius);
         std::uniform_int_distribution<int> yRand(mRadius, 768 - mRadius);
@@ -19,6 +22,7 @@ public:
         mLoc.y = yRand(gen);
         mSpeed.x = speed(gen); // Random speed between 1 and 5
         mSpeed.y = speed(gen); // Random speed between 1 and 5
+        mSpeedNext = mSpeed;
     }
 
     void Update(CMPUT350::GameContext* context) override
@@ -47,7 +51,7 @@ public:
         mSpeedNext = mSpeed;
     }
 
-    void LateUpdate(CMPUT350::GameContext* context) override
+    void LateUpdate(CMPUT350::GameContext*) override
     {
         if (mFrameCollisions > 0)
             mNumCollisions++;
@@ -66,7 +70,8 @@ public:
             {
                 mFrameCollisions++;
                 CMPUT350::Point2D normal = b1 - b2;
-                normal /= normal.Distance(CMPUT350::Point2D(0, 0));
+                if (normal == CMPUT350::Point2D{}) normal = {1, 0};
+                normal.Normalize();
                 mCollisionPoint = normal * (-mRadius);
                 float m1 = 3.14f * mRadius * mRadius; // mass of this ball
                 float m2 = 3.14f * ball->mRadius * ball->mRadius; // mass of other ball
@@ -80,9 +85,15 @@ public:
     const CMPUT350::Rect& GetBounds() override
     {
         static CMPUT350::Rect bounds({0, 0}, 0, 0); // Initialize with dummy values
-        bounds = CMPUT350::Rect(mLoc - mRadius, 2 * mRadius, 2 * mRadius);
+        bounds = CMPUT350::Rect(CMPUT350::Point2D(-mRadius, -mRadius), 2 * mRadius, 2 * mRadius);
         return bounds;
     }
+    const std::vector<CMPUT350::Shape>& GetShapes() override {
+        mShapes = {CMPUT350::Shape(CMPUT350::Circle({}, static_cast<float>(mRadius)))};
+        return mShapes;
+    }
+    CMPUT350::Point2D GetLocation() const override { return mLoc; }
+    float GetRotation() const override { return 0; }
 
     bool IsAlive() const override
     {
@@ -91,10 +102,10 @@ public:
 
     void RenderForeground(CMPUT350::GameContext* context) override
     {
-        context->ScreenContext->DrawCircle(mLoc, mRadius, CMPUT350::Colors::red);
-        context->ScreenContext->DrawCenteredText("Circle" + std::to_string(mNumCollisions), mRadius / 6.0f, mLoc,
+        context->ScreenContext->DrawCircle({}, mRadius, CMPUT350::Colors::red);
+        context->ScreenContext->DrawCenteredText("Circle" + std::to_string(mNumCollisions), mRadius / 6.0f, {},
                                                  CMPUT350::Colors::white);
-        context->ScreenContext->DrawLine(mLoc, mLoc + mCollisionPoint, mRadius * 0.1f, CMPUT350::Colors::blue);
+        context->ScreenContext->DrawLine({}, mCollisionPoint, mRadius * 0.1f, CMPUT350::Colors::blue);
     }
 
 private:
@@ -102,18 +113,18 @@ private:
     static std::mt19937 gen;
 
     int mRadius, mNumCollisions, mFrameCollisions;
+    std::vector<CMPUT350::Shape> mShapes;
     CMPUT350::Point2D mLoc, mSpeed, mSpeedNext, mCollisionPoint;
 };
 
 // Shared randoms across all balls
-// These are the actual objeects associated with the class. Normally these
-// would be in a C++ file
+// These are the actual objeects associated with the class. 
 std::random_device Ball::rd;
 std::mt19937 Ball::gen(rd());
 
-int main()
+int main(int argc, char **argv)
 {
-    bool mBallSsample = true;
+    const bool mBallSsample = argc > 1 && std::string(argv[1]) == "--balls";
 
     if (mBallSsample)
     {
@@ -125,14 +136,7 @@ int main()
     else
     {
         CMPUT350::GameEngine engine(768, 1024, "Galaga");
-        auto player = std::make_shared<Player>(CMPUT350::Point2D(768 / 2, 900));
-        engine.AddGameObject(player);
-        engine.AddGameObject(std::make_shared<Stars>(250, CMPUT350::Rect(0, 0, 768, 1024)));
-        for (int x = 0; x < 4; x++)
-        {
-            auto enemy = std::make_shared<Enemy>(CMPUT350::Point2D(100 + x * 200, 100));
-            engine.AddGameObject(enemy);
-        }
+        engine.AddGameObject(std::make_shared<Galaga>(768, 1024));
         engine.Run();
     }
     return 0;

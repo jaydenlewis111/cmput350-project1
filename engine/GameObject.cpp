@@ -2,11 +2,11 @@
 
 namespace CMPUT350 {
 
-void GameObject::Initialize(GameContext *context) { return; }
-void GameObject::Update(GameContext *context) { return; }
-void GameObject::LateUpdate(GameContext *context) { return; }
-void GameObject::RenderUI(GameContext *contextrender) { return; }
-bool GameObject::HandleKeyEvent(GameContext *context, char key) { return false; }
-bool GameObject::IsAlive() const { return true; }
-void GameObject::Kill() {}
+void GameObject::Initialize(GameContext *) {}
+void GameObject::Update(GameContext *) {}
+void GameObject::LateUpdate(GameContext *) {}
+void GameObject::RenderUI(GameContext *) {}
+void GameObject::ReceiveNotification(const std::string &) {}
+bool GameObject::IsAlive() const { return mAlive; }
+void GameObject::Kill() { mAlive = false; }
 }  // namespace CMPUT350

@@ -25,7 +25,7 @@ void Stars::RenderBackground(CMPUT350::GameContext* context)
     for (auto& star : mStarPositions)
     {
         curr++;
-        if ((curr + skip / 5) % (mStarPositions.size() / 20) != 0)
+        if ((curr + skip / 5) % std::max<std::size_t>(1, mStarPositions.size() / 20) != 0)
             context->ScreenContext->DrawCircle(star, 1.0f, c[(curr) % 4]);
         star.y += 3;
         if (star.y > mBounds.topLeft.y + mBounds.height)
